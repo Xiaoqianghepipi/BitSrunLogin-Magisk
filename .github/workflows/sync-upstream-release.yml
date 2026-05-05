@@ -1,0 +1,126 @@
+name: Sync Upstream Release And Publish Module
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/30 * * * *"
+
+permissions:
+  contents: write
+
+jobs:
+  sync-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fetch latest upstream release
+        id: upstream
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          api_url="https://api.github.com/repos/Mmx233/BitSrunLoginGo/releases/latest"
+          json="$(curl -fsSL "$api_url")"
+
+          tag="$(echo "$json" | jq -r '.tag_name')"
+          release_url="$(echo "$json" | jq -r '.html_url')"
+          asset_url="$(echo "$json" | jq -r '.assets[] | select(.name == "bitsrun_android_arm64.tar.gz") | .browser_download_url' | head -n1)"
+
+          if [ -z "$tag" ] || [ "$tag" = "null" ]; then
+            echo "无法获取上游 release tag" >&2
+            exit 1
+          fi
+
+          if [ -z "$asset_url" ] || [ "$asset_url" = "null" ]; then
+            echo "未找到资产 bitsrun_android_arm64.tar.gz" >&2
+            exit 1
+          fi
+
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "release_url=$release_url" >> "$GITHUB_OUTPUT"
+          echo "asset_url=$asset_url" >> "$GITHUB_OUTPUT"
+
+      - name: Skip if release already exists
+        id: check_current
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          tag="${{ steps.upstream.outputs.tag }}"
+          status="$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $GH_TOKEN" "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/${tag}")"
+
+          if [ "$status" = "200" ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "当前仓库已存在 tag=${tag} 的 release，跳过。"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download and extract bitsrun binary
+        if: steps.check_current.outputs.exists == 'false'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p _ci_tmp/extract
+          curl -fL "${{ steps.upstream.outputs.asset_url }}" -o _ci_tmp/bitsrun_android_arm64.tar.gz
+          tar -xzf _ci_tmp/bitsrun_android_arm64.tar.gz -C _ci_tmp/extract
+
+          candidate=""
+          if [ -f "_ci_tmp/extract/bitsrun" ]; then
+            candidate="_ci_tmp/extract/bitsrun"
+          else
+            candidate="$(find _ci_tmp/extract -type f \( -name 'bitsrun' -o -iname '*bitsrun*' -o -iname '*BitSrun*' \) | head -n1 || true)"
+          fi
+
+          if [ -z "$candidate" ]; then
+            echo "解压后未找到 bitsrun 可执行文件" >&2
+            find _ci_tmp/extract -maxdepth 3 -type f | sed 's/^/  /'
+            exit 1
+          fi
+
+          cp "$candidate" ./bitsrun
+          chmod 755 ./bitsrun
+
+      - name: Update module version and package zip
+        if: steps.check_current.outputs.exists == 'false'
+        id: package
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          tag="${{ steps.upstream.outputs.tag }}"
+
+          sed -i "s/^version=.*/version=${tag}/" module.prop
+
+          digits="$(echo "$tag" | tr -cd '0-9')"
+          if [ -z "$digits" ]; then
+            digits="$(date +%Y%m%d)"
+          fi
+          version_code="$(echo "$digits" | cut -c1-9)"
+          sed -i "s/^versionCode=.*/versionCode=${version_code}/" module.prop
+
+          zip_name="bitsrun_magisk_${tag}.zip"
+          zip -r "$zip_name" . \
+            -x ".git/*" \
+            -x ".github/*" \
+            -x "_ci_tmp/*"
+
+          echo "zip_name=$zip_name" >> "$GITHUB_OUTPUT"
+
+      - name: Create release and upload module zip
+        if: steps.check_current.outputs.exists == 'false'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.upstream.outputs.tag }}
+          name: bitsrun_magisk ${{ steps.upstream.outputs.tag }}
+          body: |
+            Auto-built from upstream release: ${{ steps.upstream.outputs.release_url }}
+            
+            Asset synced: bitsrun_android_arm64.tar.gz
+            Included binary: bitsrun
+          files: ${{ steps.package.outputs.zip_name }}
