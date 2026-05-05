@@ -119,6 +119,7 @@ jobs:
           tag_name: ${{ steps.upstream.outputs.tag }}
           name: bitsrun_magisk ${{ steps.upstream.outputs.tag }}
           body: |
+            喜报：自动构建成功了！！！
             Auto-built from upstream release: ${{ steps.upstream.outputs.release_url }}
             
             Asset synced: bitsrun_android_arm64.tar.gz
