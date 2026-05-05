@@ -15,7 +15,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Fetch latest upstream release
+      - name: Fetch latest upstream release（获取最新release）
         id: upstream
         shell: bash
         run: |

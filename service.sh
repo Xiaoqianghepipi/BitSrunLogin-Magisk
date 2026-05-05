@@ -17,5 +17,5 @@ sed -i 's/$(description=)$[^"]*/\1[状态]关闭中/' "$MODDIR/module.prop"
 # 等待 3 秒
 sleep 3s
 
-# 启动主程序守护脚本（已替换为运行 BitSrunLogin 的守护逻辑）
+# 启动主程序守护脚本
 "${MODDIR}/bitsrun_core.sh" &
