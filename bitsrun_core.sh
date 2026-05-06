@@ -4,6 +4,7 @@ MODDIR=${0%/*}
 CONFIG_FILE="${MODDIR}/config/config.yaml"
 MODULE_PROP="${MODDIR}/module.prop"
 BITSRUN_BIN="${MODDIR}/bitsrun"
+BITSRUN_PROC_NAME="bitsrun"
 
 # 更新module.prop文件中的description
 update_module_description() {
@@ -14,12 +15,12 @@ update_module_description() {
 while true; do
     if ls $MODDIR | grep -q "disable"; then
         update_module_description "关闭中"
-        if pgrep -f 'bitsrun' >/dev/null; then
+        if pgrep -x "${BITSRUN_PROC_NAME}" >/dev/null; then
             echo "开关控制$(date "+%Y-%m-%d %H:%M:%S") 进程已存在，正在关闭 ..."
-            pkill bitsrun # 关闭进程
+            pkill -x "${BITSRUN_PROC_NAME}" # 关闭进程
         fi
     else
-        if ! pgrep -f 'bitsrun' >/dev/null; then
+        if ! pgrep -x "${BITSRUN_PROC_NAME}" >/dev/null; then
             if [ ! -f "$CONFIG_FILE" ]; then
                 update_module_description "config.yaml不存在"
                 sleep 2s
@@ -36,7 +37,7 @@ while true; do
                 sleep 3s # 等待bitsrun主程序启动完成
                 update_module_description "主程序已开启(配置文件模式)"
             fi
-            if ! pgrep -f 'bitsrun' >/dev/null; then
+            if ! pgrep -x "${BITSRUN_PROC_NAME}" >/dev/null; then
                 update_module_description "主程序启动失败，请检查配置文件"
             fi
         else
