@@ -5,9 +5,6 @@ CONFIG_FILE="${MODDIR}/config/config.yaml"
 MODULE_PROP="${MODDIR}/module.prop"
 BITSRUN_BIN="${MODDIR}/bitsrun"
 
-# 进入模块目录，保证 command_args 里使用相对路径时可用
-cd "${MODDIR}" || exit 1
-
 # 更新module.prop文件中的description
 update_module_description() {
     local status_message=$1
