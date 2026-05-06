@@ -2,7 +2,6 @@
 
 MODDIR=${0%/*}
 CONFIG_FILE="${MODDIR}/config/config.yaml"
-LOG_FILE="${MODDIR}/log.log"
 MODULE_PROP="${MODDIR}/module.prop"
 BITSRUN_BIN="${MODDIR}/bitsrun"
 
@@ -26,27 +25,27 @@ while true; do
         if ! pgrep -f 'bitsrun' >/dev/null; then
             if [ ! -f "$CONFIG_FILE" ]; then
                 update_module_description "config.yaml不存在"
-                sleep 3s
+                sleep 2s
                 continue
             fi
 
             # 如果 config 目录下存在 command_args 文件，则读取其中的内容作为启动参数
             if [ -f "${MODDIR}/config/command_args" ]; then
-                TZ=Asia/Shanghai ${BITSRUN_BIN} $(cat ${MODDIR}/config/command_args) > ${LOG_FILE} &
-                sleep 5s # 等待主程序启动完成
+                TZ=Asia/Shanghai ${BITSRUN_BIN} $(cat ${MODDIR}/config/command_args) &
+                sleep 3s # 等待bitsrun主程序启动完成
                 update_module_description "主程序已开启(启动参数模式)"
             else
-                TZ=Asia/Shanghai ${BITSRUN_BIN} -config ${CONFIG_FILE} > ${LOG_FILE} &
-                sleep 5s # 等待主程序启动完成
+                TZ=Asia/Shanghai ${BITSRUN_BIN} -config ${CONFIG_FILE} &
+                sleep 3s # 等待bitsrun主程序启动完成
                 update_module_description "主程序已开启(配置文件模式)"
             fi
             if ! pgrep -f 'bitsrun' >/dev/null; then
-                update_module_description "主程序启动失败，请检查配置文件或二进制文件"
+                update_module_description "主程序启动失败，请检查配置文件"
             fi
         else
             echo "开关控制$(date "+%Y-%m-%d %H:%M:%S") 进程已存在"
         fi
     fi
     
-    sleep 3s # 暂停3秒后再次执行循环
+    sleep 5s # 暂停5秒后再次执行循环
 done

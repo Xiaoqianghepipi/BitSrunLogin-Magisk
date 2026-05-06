@@ -112,7 +112,6 @@ jobs:
           fi
 
           cp "$candidate" ./bitsrun
-          chmod 755 ./bitsrun
 
       - name: Write CORE_VERSION and package zip（更新CORE_VERSION并将模块打包为zip）
         if: steps.check_current.outputs.exists == 'false'
@@ -126,13 +125,6 @@ jobs:
 
           # 记录上游内核版本，供安装时展示
           printf "%s\n" "$tag" > CORE_VERSION
-
-          digits="$(echo "$tag" | tr -cd '0-9')"
-          if [ -z "$digits" ]; then
-            digits="$(date +%Y%m%d)"
-          fi
-          version_code="$(echo "$digits" | cut -c1-9)"
-          sed -i "s/^versionCode=.*/versionCode=${version_code}/" module.prop
 
           zip_name="bitsrun_magisk_${module_version}_core_${tag}.zip"
           zip -r "$zip_name" . \
