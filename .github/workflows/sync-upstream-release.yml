@@ -1,9 +1,22 @@
-name: Sync Upstream Release And Publish Module
+name: Sync Upstream Release And Publish Module（同步上游发布并发布模块）
 
 on:
   workflow_dispatch:
   schedule:
     - cron: "*/30 * * * *"
+  push:
+    paths:
+      - "module.prop"
+      - "bitsrun"
+      - "bitsrun_core.sh"
+      - "service.sh"
+      - "customize.sh"
+      - "uninstall.sh"
+      - "config/**"
+      - "META-INF/**"
+      - "README.md"
+      - "LICENSE"
+      - "CORE_VERSION"
 
 permissions:
   contents: write
@@ -42,6 +55,21 @@ jobs:
           echo "release_url=$release_url" >> "$GITHUB_OUTPUT"
           echo "asset_url=$asset_url" >> "$GITHUB_OUTPUT"
 
+      - name: Read module version（读取模块版本）
+        id: module_info
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          module_version="$(sed -n 's/^version=//p' module.prop | head -n1)"
+
+          if [ -z "$module_version" ]; then
+            echo "无法读取模块版本" >&2
+            exit 1
+          fi
+
+          echo "module_version=$module_version" >> "$GITHUB_OUTPUT"
+
       - name: Skip if release already exists
         id: check_current
         env:
@@ -50,17 +78,17 @@ jobs:
         run: |
           set -euo pipefail
 
-          tag="${{ steps.upstream.outputs.tag }}"
-          status="$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $GH_TOKEN" "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/${tag}")"
+          release_tag="bitsrun_magisk_${{ steps.module_info.outputs.module_version }}_core_${{ steps.upstream.outputs.tag }}"
+          status="$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $GH_TOKEN" "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/${release_tag}")"
 
           if [ "$status" = "200" ]; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
-            echo "当前仓库已存在 tag=${tag} 的 release，跳过。"
+            echo "当前仓库已存在 tag=${release_tag} 的 release，跳过。"
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Download and extract bitsrun binary
+      - name: Download and extract bitsrun binary（下载bitsrungo android arm64 原始二进制文件）
         if: steps.check_current.outputs.exists == 'false'
         shell: bash
         run: |
@@ -86,7 +114,7 @@ jobs:
           cp "$candidate" ./bitsrun
           chmod 755 ./bitsrun
 
-      - name: Update module version and package zip
+      - name: Write CORE_VERSION and package zip（更新CORE_VERSION并将模块打包为zip）
         if: steps.check_current.outputs.exists == 'false'
         id: package
         shell: bash
@@ -94,8 +122,10 @@ jobs:
           set -euo pipefail
 
           tag="${{ steps.upstream.outputs.tag }}"
+          module_version="${{ steps.module_info.outputs.module_version }}"
 
-          sed -i "s/^version=.*/version=${tag}/" module.prop
+          # 记录上游内核版本，供安装时展示
+          printf "%s\n" "$tag" > CORE_VERSION
 
           digits="$(echo "$tag" | tr -cd '0-9')"
           if [ -z "$digits" ]; then
@@ -104,22 +134,24 @@ jobs:
           version_code="$(echo "$digits" | cut -c1-9)"
           sed -i "s/^versionCode=.*/versionCode=${version_code}/" module.prop
 
-          zip_name="bitsrun_magisk_${tag}.zip"
+          zip_name="bitsrun_magisk_${module_version}_core_${tag}.zip"
           zip -r "$zip_name" . \
             -x ".git/*" \
             -x ".github/*" \
             -x "_ci_tmp/*"
 
+          echo "module_version=$module_version" >> "$GITHUB_OUTPUT"
           echo "zip_name=$zip_name" >> "$GITHUB_OUTPUT"
 
-      - name: Create release and upload module zip
+      - name: Create release and upload module zip（创建 release 并上传模块zip）
         if: steps.check_current.outputs.exists == 'false'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.upstream.outputs.tag }}
-          name: bitsrun_magisk ${{ steps.upstream.outputs.tag }}
+          tag_name: bitsrun_magisk_${{ steps.package.outputs.module_version }}_core_${{ steps.upstream.outputs.tag }}
+          name: bitsrun_magisk_${{ steps.package.outputs.module_version }}_core_${{ steps.upstream.outputs.tag }}
           body: |
             喜报：自动构建成功了！！！
+            Module version: ${{ steps.package.outputs.module_version }}
             Auto-built from upstream release: ${{ steps.upstream.outputs.release_url }}
             
             Asset synced: bitsrun_android_arm64.tar.gz
