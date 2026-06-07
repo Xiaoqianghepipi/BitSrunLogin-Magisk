@@ -3,7 +3,7 @@ name: Sync Upstream Release And Publish Module（同步上游发布并发布模�
 on:
   workflow_dispatch:
   schedule:
-    - cron: "*/30 * * * *"
+    - cron: "0 12 * * *"
   push:
     paths:
       - "module.prop"
